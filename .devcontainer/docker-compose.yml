@@ -1,27 +1,22 @@
 version: "2"
 
 services:
-  golang_service:
-    # image: golang:1.13
-    build: 
-        context: .
-        dockerfile: Dockerfile
-    container_name: golangApp_1_13
+  node_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nodeApp_12
     privileged: true
     extra_hosts:
       - "github.global.ssl.fastly.net:151.101.185.194"
       - "github.com:192.30.253.112"
     volumes:
       - ../:/workspace
-      - ~/.volumes/apps/golangDev/go:/go
       - ~/.gitconfig:/root/.gitconfig
-      - ~/.volumes/apps/golangDev/.vscode-server:/root/.vscode-server
+      - ~/.volumes/apps/nodeDev/.vscode-server:/root/.vscode-server
     command: sleep infinity
     ports:
-      - 16000:6000
+      - 13000:3000
     environment:
       pwd: LocalHostPassWord123
-      GOPATH: /go:/workspace
-      MgoUser: kegel-admin
-      MgoPwd: lsp123123
-      GOPROXY: "https://goproxy.cn,direct"
+      user: admin

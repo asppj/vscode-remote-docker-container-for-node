@@ -1,41 +1,53 @@
-#-------------------------------------------------------------------------------------------------------------
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License. See https://go.microsoft.com/fwlink/?linkid=2090316 for license information.
-#-------------------------------------------------------------------------------------------------------------
+FROM node:12.10.0-buster
 
-FROM golang:1.13
+# Avoid warnings by switching to noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
+
+# The node image comes with a base non-root 'node' user which this Dockerfile
+# gives sudo access. However, for Linux, this user's GID/UID must match your local
+# user UID/GID to avoid permission issues with bind mounts. Update USER_UID / USER_GID 
+# if yours is not 1000. See https://aka.ms/vscode-remote/containers/non-root-user.
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+# COPY ./sources.list /etc/apt/sources.list.d/tust.list
 COPY ./sources.list /etc/apt/sources.list
-
-# RUN go get -u -v \
-#     github.com/mdempsky/gocode \
-#     github.com/uudashr/gopkgs/cmd/gopkgs \
-#     github.com/ramya-rao-a/go-outline \
-#     github.com/acroca/go-symbols \
-#     golang.org/x/tools/cmd/guru \
-#     golang.org/x/tools/cmd/gorename \
-#     github.com/rogpeppe/godef \
-#     github.com/zmb3/gogetdoc \
-#     github.com/sqs/goreturns \
-#     golang.org/x/tools/cmd/goimports \
-#     golang.org/x/lint/golint \
-#     github.com/alecthomas/gometalinter \
-#     honnef.co/go/tools/... \
-#     github.com/golangci/golangci-lint/cmd/golangci-lint \
-#     github.com/mgechev/revive \
-#     github.com/derekparker/delve/cmd/dlv 2>&1
-
-# # gocode-gomod
-# RUN go get -x -d github.com/stamblerre/gocode \
-#     && go build -o gocode-gomod github.com/stamblerre/gocode \
-#     && mv gocode-gomod $GOPATH/bin/
-
-# Install git, process tools, lsb-release (common in install instructions for CLIs)
-RUN apt-get update && apt-get -y install git procps lsb-release
-
-# Clean up
-RUN apt-get autoremove -y \
+# Configure apt and install packages
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \ 
+    #
+    # Verify git and needed tools are installed
+    && apt-get install -y git procps \
+    #
+    # Remove outdated yarn from /opt and install via package 
+    # so it can be easily updated via apt-get upgrade yarn
+    && rm -rf /opt/yarn-* \
+    && rm -f /usr/local/bin/yarn \
+    && rm -f /usr/local/bin/yarnpkg \
+    && apt-get install -y curl apt-transport-https lsb-release \
+    && curl -sS https://dl.yarnpkg.com/$(lsb_release -is | tr '[:upper:]' '[:lower:]')/pubkey.gpg | apt-key add - 2>/dev/null \
+    && echo "deb https://dl.yarnpkg.com/$(lsb_release -is | tr '[:upper:]' '[:lower:]')/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
+    && apt-get update \
+    && apt-get -y install --no-install-recommends yarn \
+    #
+    # Install eslint globally
+    && npm config set registry https://registry.npm.taobao.org \
+    && npm install -g eslint \
+    # && npm install -g yarn\
+    && yarn config set registry https://registry.npm.taobao.org \
+    #
+    # Create a non-root user to use if preferred - see https://aka.ms/vscode-remote/containers/non-root-user.
+    && if [ "$USER_GID" != "1000" ]; then groupmod node --gid $USER_GID; fi \
+    && if [ "$USER_UID" != "1000" ]; then usermod --uid $USER_UID node; fi \
+    # [Optional] Add sudo support for non-root users
+    && apt-get install -y sudo \
+    && echo node ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/node \
+    && chmod 0440 /etc/sudoers.d/node \
+    #
+    # Clean up
+    && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the default shell to bash instead of sh
-ENV SHELL /bin/bash
+
+# Switch back to dialog for any ad-hoc use of apt-get
+ENV DEBIAN_FRONTEND=
